@@ -14,6 +14,11 @@ DOC_CONFIG = {
     "Trial Plan & Calendar": {"date_col": ""},  # No date required
     "Charge Order": {"date_col": "Charge Date"},
     "Trial Progress": {"date_col": "Last Hearing Date"},
+    "FRs and Comments": {
+        "date_col": "",
+        "file_name": "FR and Comments",
+        "extensions": [".pdf"],
+    },
 }
 
 
@@ -31,9 +36,13 @@ def load_cases():
     for base_doc_name, config in DOC_CONFIG.items():
       # 1. Check file path availability in the local folder
       found_path = ""
+      file_name = config.get("file_name", base_doc_name)
       if base_path and os.path.exists(base_path):
-        for ext in [".pdf", ".docx", ".doc", ".txt", ".xlsx", ""]:
-          potential_path = os.path.join(base_path, f"{base_doc_name}{ext}")
+        extensions = config.get(
+            "extensions", [".pdf", ".docx", ".doc", ".txt", ".xlsx", ""]
+        )
+        for ext in extensions:
+          potential_path = os.path.join(base_path, f"{file_name}{ext}")
           if os.path.exists(potential_path) and os.path.isfile(potential_path):
             found_path = potential_path
             break
