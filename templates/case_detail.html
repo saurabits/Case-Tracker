@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}{{ case.case_number }} · Case Tracker{% endblock %}
+{% block content %}
+<section class="detail-hero">
+  <div class="page-shell">
+    <a class="back-link" href="{{ url_for('index') }}">← &nbsp;Back to dashboard</a>
+    <div class="detail-title"><div><p class="eyebrow">CASE DETAILS</p><h1>{{ case.case_number or 'Untitled case' }}</h1><p>{{ case.hio or 'HIO not assigned' }}</p></div><span class="stage-pill light">{{ case.get('Stage', 'Not set') or 'Not set' }}</span></div>
+    <div class="case-facts"><div><span>HIO</span><strong>{{ case.hio or '—' }}</strong></div><div><span>Court</span><strong>{{ case.get('Court', '—') or '—' }}</strong></div><div><span>Next date</span><strong>{{ case.get('Next Date', '—') or '—' }}</strong></div></div>
+  </div>
+</section>
+<section class="page-shell detail-content">
+  <div class="section-intro"><span>01</span><div><p class="eyebrow">CASE RECORDS</p><h2>FIR / Charge Sheet Details</h2><p>Primary filings and investigation records associated with this case.</p></div></div>
+  <div class="document-grid">
+    {% for name in ['FIR', 'Chargesheet', 'FR & Comments'] %}{% set doc = case.doc_links[name] %}
+    <article class="document-card {% if not doc.path %}unavailable{% endif %}">
+      <div class="doc-icon">{% if name == 'FIR' %}FI{% elif name == 'Chargesheet' %}CS{% else %}FR{% endif %}</div>
+      <div class="doc-copy"><small>OFFICIAL RECORD</small><h3>{{ name }}</h3><p>{% if doc.date %}Filed on {{ doc.date }}{% elif doc.path %}Available to view{% else %}Document not uploaded{% endif %}</p></div>
+      {% if doc.path %}<button class="open-document" data-url="{{ url_for('view_file', path=doc.path) }}" data-title="{{ name }} · {{ case.case_number }}">View document <span>↗</span></button>{% else %}<button class="open-document" disabled>Not available</button>{% endif %}
+    </article>{% endfor %}
+  </div>
+  <div class="scroll-note">End of available case records</div>
+</section>
+<dialog id="fileModal" class="file-modal"><div class="modal-heading"><div><p class="eyebrow">DOCUMENT PREVIEW</p><h2 id="modalTitle">Document</h2></div><button id="closeModal" aria-label="Close preview">×</button></div><iframe id="fileFrame" title="Document preview"></iframe></dialog>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='app.js') }}"></script>{% endblock %}

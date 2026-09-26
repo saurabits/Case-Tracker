@@ -1,20 +1,19 @@
 import os
-from flask import Flask, abort, render_template, request, send_file
+from pathlib import Path
+
 import pandas as pd
+from flask import Flask, abort, render_template, request, send_file
 
 app = Flask(__name__)
 
-EXCEL_FILE = "cases.xlsx"
+BASE_DIR = Path(__file__).resolve().parent
+EXCEL_FILE = BASE_DIR / "cases.xlsx"
 
-# Map document types to their corresponding Excel date column names
 DOC_CONFIG = {
     "OPN": {"date_col": "OPN Updated Date"},
     "FIR": {"date_col": "FIR Date"},
     "Chargesheet": {"date_col": "Chargesheet Date"},
-    "Trial Plan & Calendar": {"date_col": ""},  # No date required
-    "Charge Order": {"date_col": "Charge Date"},
-    "Trial Progress": {"date_col": "Last Hearing Date"},
-    "FRs and Comments": {
+    "FR & Comments": {
         "date_col": "",
         "file_name": "FR and Comments",
         "extensions": [".pdf"],
@@ -22,86 +21,82 @@ DOC_CONFIG = {
 }
 
 
+def _folder_path(raw_path):
+    """Resolve stored paths while allowing the workbook to move with the app."""
+    path = Path(str(raw_path).strip()).expanduser()
+    if path.is_dir():
+        return path
+    portable_path = BASE_DIR / path.name
+    return portable_path if portable_path.is_dir() else path
+
+
+def _formatted_date(raw_date):
+    if not raw_date:
+        return ""
+    parsed = pd.to_datetime(raw_date, errors="coerce")
+    if pd.notnull(parsed):
+        return parsed.strftime("%d.%m.%Y")
+    return str(raw_date).split("T")[0]
+
+
 def load_cases():
-  if not os.path.exists(EXCEL_FILE):
-    return []
-  df = pd.read_excel(EXCEL_FILE)
-  df = df.fillna("")
-  records = df.to_dict(orient="records")
+    if not EXCEL_FILE.exists():
+        return []
 
-  for record in records:
-    base_path = str(record.get("Folder Path", "")).strip()
-    record["doc_links"] = {}
+    records = pd.read_excel(EXCEL_FILE).fillna("").to_dict(orient="records")
+    for index, record in enumerate(records):
+        record["id"] = index
+        record["case_number"] = record.get("Case No / CC No", record.get("Case Number", ""))
+        record["hio"] = record.get("HIO", record.get("Client Name", ""))
+        folder = _folder_path(record.get("Folder Path", ""))
+        record["doc_links"] = {}
 
-    for base_doc_name, config in DOC_CONFIG.items():
-      # 1. Check file path availability in the local folder
-      found_path = ""
-      file_name = config.get("file_name", base_doc_name)
-      if base_path and os.path.exists(base_path):
-        extensions = config.get(
-            "extensions", [".pdf", ".docx", ".doc", ".txt", ".xlsx", ""]
-        )
-        for ext in extensions:
-          potential_path = os.path.join(base_path, f"{file_name}{ext}")
-          if os.path.exists(potential_path) and os.path.isfile(potential_path):
-            found_path = potential_path
-            break
+        for document_name, config in DOC_CONFIG.items():
+            found_path = ""
+            file_name = config.get("file_name", document_name)
+            extensions = config.get("extensions", [".pdf", ".docx", ".doc", ".txt", ".xlsx", ""])
+            if folder.is_dir():
+                for extension in extensions:
+                    candidate = folder / f"{file_name}{extension}"
+                    if candidate.is_file():
+                        found_path = str(candidate.resolve())
+                        break
 
-      # 2. Extract specific date with flexible column lookup
-      date_col = config["date_col"]
-      raw_date = ""
-      if date_col:
-        if date_col in record:
-          raw_date = record[date_col]
-        else:
-          for k, v in record.items():
-            if k.strip().lower() == date_col.strip().lower():
-              raw_date = v
-              break
-
-      formatted_date = ""
-      if raw_date:
-        try:
-          if isinstance(raw_date, pd.Timestamp):
-            formatted_date = raw_date.strftime("%d.%m.%Y")
-          else:
-            # Convert string/date objects into DD.MM.YYYY if standard format
-            parsed_date = pd.to_datetime(raw_date, errors="coerce")
-            if pd.notnull(parsed_date):
-              formatted_date = parsed_date.strftime("%d.%m.%Y")
-            else:
-              formatted_date = str(raw_date).split("T")[0]
-        except Exception:
-          formatted_date = str(raw_date)
-
-      # 3. Construct label (Concatenate name with date if available)
-      if formatted_date:
-        button_label = f"{base_doc_name} {formatted_date}"
-      else:
-        button_label = base_doc_name
-
-      record["doc_links"][base_doc_name] = {
-          "path": found_path,
-          "label": button_label,
-      }
-
-  return records
+            date_value = record.get(config["date_col"], "") if config["date_col"] else ""
+            record["doc_links"][document_name] = {
+                "path": found_path,
+                "date": _formatted_date(date_value),
+            }
+    return records
 
 
 @app.route("/")
 def index():
-  cases = load_cases()
-  return render_template("index.html", cases=cases)
+    return render_template("index.html", cases=load_cases())
+
+
+@app.route("/case/<int:case_id>")
+def case_detail(case_id):
+    cases = load_cases()
+    if case_id < 0 or case_id >= len(cases):
+        abort(404)
+    return render_template("case_detail.html", case=cases[case_id])
 
 
 @app.route("/view-file")
 def view_file():
-  file_path = request.args.get("path", "")
-  if file_path and os.path.exists(file_path) and os.path.isfile(file_path):
-    mimetype = "application/pdf" if file_path.lower().endswith(".pdf") else None
-    return send_file(file_path, mimetype=mimetype)
-  return abort(404, description="File not found.")
+    requested_path = Path(request.args.get("path", "")).resolve()
+    allowed_paths = {
+        Path(info["path"]).resolve()
+        for case in load_cases()
+        for info in case["doc_links"].values()
+        if info["path"]
+    }
+    if requested_path in allowed_paths and requested_path.is_file():
+        mimetype = "application/pdf" if requested_path.suffix.lower() == ".pdf" else None
+        return send_file(requested_path, mimetype=mimetype)
+    abort(404, description="File not found.")
 
 
 if __name__ == "__main__":
-  app.run(host="127.0.0.1", port=5001, debug=True)
+    app.run(host="127.0.0.1", port=5001, debug=True)
