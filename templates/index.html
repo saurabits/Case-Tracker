@@ -1,237 +1,40 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Undertrial Case Tracker</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background-color: #f4f7f6;
-            color: #333;
-        }
-        h2 {
-            color: #2c3e50;
-            margin-bottom: 20px;
-        }
-        .container {
-            max-width: 1450px;
-            margin: auto;
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            overflow-x: auto;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 10px;
-            table-layout: fixed;
-        }
-        th, td {
-            padding: 12px 10px;
-            text-align: left;
-            border-bottom: 1px solid #ddd;
-            word-wrap: break-word;
-            vertical-align: top;
-        }
-        th {
-            background-color: #2c3e50;
-            color: white;
-            font-size: 14px;
-        }
-        td {
-            font-size: 13px;
-        }
-        tr:hover {
-            background-color: #f1f1f1;
-        }
-        
-        /* Column Widths */
-        th.col-case { width: 11%; }
-        th.col-client { width: 14%; }
-        th.col-court { width: 14%; }
-        th.col-stage { width: 11%; }
-        th.col-files { width: 50%; }
+{% extends "base.html" %}
+{% block title %}Dashboard · Case Tracker{% endblock %}
+{% block content %}
+<section class="page-shell">
+  <div class="page-heading">
+    <div><p class="eyebrow">OVERVIEW</p><h1>Undertrial Cases</h1><p>Monitor active matters, court stages and case documents.</p></div>
+    <div class="case-count"><strong>{{ cases|length }}</strong><span>Total cases</span></div>
+  </div>
 
-        /* Document Group Grid Layout */
-        .docs-grid {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-        }
-
-        /* Unified Button Style */
-        .btn-doc {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            padding: 6px 10px;
-            margin: 2px 2px 2px 0;
-            background-color: #007aff;
-            color: white;
-            text-decoration: none;
-            border-radius: 5px;
-            font-size: 11px;
-            font-weight: 600;
-            cursor: pointer;
-            border: 1px solid #005bb5;
-            white-space: nowrap;
-        }
-        .btn-doc:hover {
-            background-color: #005bb5;
-        }
-
-        /* Cemented / Disabled Button Style */
-        .btn-doc.disabled {
-            background-color: #e0e0e0;
-            border-color: #ccc;
-            color: #888;
-            cursor: not-allowed;
-            pointer-events: none;
-        }
-
-        .no-file {
-            color: #999;
-            font-style: italic;
-            font-size: 11px;
-        }
-
-        /* Modal Popup Styling */
-        #fileModal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0,0,0,0.5);
-        }
-        .modal-content {
-            background-color: #fefefe;
-            margin: 5% auto;
-            padding: 20px;
-            border: 1px solid #888;
-            width: 80%;
-            height: 80%;
-            border-radius: 8px;
-            display: flex;
-            flex-direction: column;
-        }
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid #ddd;
-            padding-bottom: 10px;
-        }
-        .modal-header h3 {
-            margin: 0;
-            color: #2c3e50;
-        }
-        .close-btn {
-            background: #e74c3c;
-            color: white;
-            border: none;
-            padding: 6px 12px;
-            font-weight: bold;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        .close-btn:hover {
-            background: #c0392b;
-        }
-        iframe {
-            width: 100%;
-            height: 100%;
-            border: none;
-            margin-top: 15px;
-            flex-grow: 1;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h2>Undertrial Cases Dashboard</h2>
-        {% if cases %}
-        <table>
-            <thead>
-                <tr>
-                    <th class="col-case">Case Number</th>
-                    <th class="col-client">Client Name</th>
-                    <th class="col-court">Court</th>
-                    <th class="col-stage">Stage</th>
-                    <th class="col-files">Case Files & Documents</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for case in cases %}
-                <tr>
-                    <td>{{ case.get('Case Number', '') }}</td>
-                    <td>{{ case.get('Client Name', '') }}</td>
-                    <td>{{ case.get('Court', '') }}</td>
-                    <td><strong>{{ case.get('Stage', '') }}</strong></td>
-                    <td>
-                        {% if case.get('Folder Path') %}
-                            <div class="docs-grid">
-                                {% for base_doc_name, info in case['doc_links'].items() %}
-                                    {% if info['path'] %}
-                                        <button class="btn-doc" onclick="openModal('{{ url_for('view_file', path=info['path']) }}', '{{ info['label'] }} - {{ case.get('Case Number', '') }}')">
-                                            {{ info['label'] }}
-                                        </button>
-                                    {% else %}
-                                        <button class="btn-doc disabled" disabled>
-                                            {{ info['label'] }}
-                                        </button>
-                                    {% endif %}
-                                {% endfor %}
-                            </div>
-                        {% else %}
-                            <span class="no-file">No Folder Linked</span>
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <p>No cases found or Excel file is missing.</p>
-        {% endif %}
+  <div class="table-card">
+    <div class="table-toolbar"><div><span class="live-dot"></span> Active case register</div><span>Select a row to view full details <b>→</b></span></div>
+    {% if cases %}
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Sl No.</th><th>Case No / CC No</th><th>HIO</th><th>Court</th><th>Stage</th><th>OPN</th><th aria-label="Open"></th></tr></thead>
+        <tbody>
+        {% for case in cases %}
+          <tr class="case-row" tabindex="0" role="link" aria-label="View {{ case.case_number }}" data-href="{{ url_for('case_detail', case_id=case.id) }}">
+            <td><span class="serial">{{ '%02d'|format(loop.index) }}</span></td>
+            <td><strong class="case-number">{{ case.case_number or '—' }}</strong></td>
+            <td>{{ case.hio or '—' }}</td><td>{{ case.get('Court', '—') or '—' }}</td>
+            <td><span class="stage-pill">{{ case.get('Stage', 'Not set') or 'Not set' }}</span></td>
+            <td>
+              {% set opn = case.doc_links['OPN'] %}
+              {% if opn.path %}<button class="document-link" data-url="{{ url_for('view_file', path=opn.path) }}" data-title="OPN · {{ case.case_number }}">View OPN{% if opn.date %}<small>{{ opn.date }}</small>{% endif %}</button>
+              {% else %}<span class="not-available">Not available</span>{% endif %}
+            </td>
+            <td class="row-arrow">→</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
     </div>
+    {% else %}<div class="empty-state"><strong>No cases found</strong><p>Add case records to the workbook to see them here.</p></div>{% endif %}
+  </div>
+</section>
 
-    <!-- Pop-up Modal Window -->
-    <div id="fileModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 id="modalTitle">Document Viewer</h3>
-                <button class="close-btn" onclick="closeModal()">Close &times;</button>
-            </div>
-            <iframe id="fileFrame" src=""></iframe>
-        </div>
-    </div>
-
-    <script>
-        function openModal(fileUrl, titleText) {
-            document.getElementById('modalTitle').innerText = titleText;
-            document.getElementById('fileFrame').src = fileUrl;
-            document.getElementById('fileModal').style.display = 'block';
-        }
-
-        function closeModal() {
-            document.getElementById('fileModal').style.display = 'none';
-            document.getElementById('fileFrame').src = '';
-        }
-
-        window.onclick = function(event) {
-            var modal = document.getElementById('fileModal');
-            if (event.target == modal) {
-                closeModal();
-            }
-        }
-    </script>
-</body>
-</html>
+<dialog id="fileModal" class="file-modal"><div class="modal-heading"><div><p class="eyebrow">DOCUMENT PREVIEW</p><h2 id="modalTitle">Document</h2></div><button id="closeModal" aria-label="Close preview">×</button></div><iframe id="fileFrame" title="Document preview"></iframe></dialog>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='app.js') }}"></script>{% endblock %}
