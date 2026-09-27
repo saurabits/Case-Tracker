@@ -20,6 +20,8 @@ DOC_CONFIG = {
     },
 }
 
+ACCUSED_FILE_EXTENSIONS = {".xlsx", ".xlsm", ".xls"}
+
 
 def _folder_path(raw_path):
     """Resolve stored paths while allowing the workbook to move with the app."""
@@ -39,6 +41,62 @@ def _formatted_date(raw_date):
     return str(raw_date).split("T")[0]
 
 
+def _display_value(value):
+    """Format spreadsheet dates without treating ordinary numbers as dates."""
+    if isinstance(value, pd.Timestamp):
+        return value.strftime("%d.%m.%Y")
+    return str(value).strip()
+
+
+def _load_accused(folder):
+    """Load the case's accused workbook into a display-friendly table."""
+    if not folder.is_dir():
+        return {"columns": [], "rows": []}
+
+    accused_file = next(
+        (
+            path
+            for path in sorted(folder.iterdir(), key=lambda item: item.name.lower())
+            if path.is_file()
+            and path.stem.strip().lower() == "accused"
+            and path.suffix.lower() in ACCUSED_FILE_EXTENSIONS
+        ),
+        None,
+    )
+    if accused_file is None:
+        return {"columns": [], "rows": []}
+
+    try:
+        frame = pd.read_excel(accused_file).dropna(how="all").fillna("")
+    except (OSError, ValueError, ImportError):
+        return {"columns": [], "rows": []}
+
+    frame.columns = [str(column).strip() for column in frame.columns]
+    columns = [column for column in frame.columns if column]
+    status_column = next(
+        (column for column in columns if "status" in column.lower()),
+        columns[1] if len(columns) > 1 else None,
+    )
+    rows = []
+    for record in frame[columns].to_dict(orient="records"):
+        cells = [_display_value(record[column]) for column in columns]
+        status = str(record.get(status_column, "")).strip() if status_column else ""
+        status_key = status.lower()
+        if "abscond" in status_key:
+            status_class = "absconding"
+        elif any(word in status_key for word in ("appear", "present")):
+            status_class = "appearing"
+        else:
+            status_class = "neutral"
+        rows.append({
+            "cells": cells,
+            "status_index": columns.index(status_column) if status_column else -1,
+            "status_class": status_class,
+        })
+
+    return {"columns": columns, "rows": rows}
+
+
 def load_cases():
     if not EXCEL_FILE.exists():
         return []
@@ -50,6 +108,7 @@ def load_cases():
         record["hio"] = record.get("HIO", record.get("Client Name", ""))
         folder = _folder_path(record.get("Folder Path", ""))
         record["doc_links"] = {}
+        record["accused"] = _load_accused(folder)
 
         for document_name, config in DOC_CONFIG.items():
             found_path = ""
