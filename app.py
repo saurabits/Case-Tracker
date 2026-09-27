@@ -79,7 +79,7 @@ def _load_accused(folder):
     )
     rows = []
     for record in frame[columns].to_dict(orient="records"):
-        cells = [_display_value(record[column]) for column in columns]
+        values = [_display_value(record[column]) for column in columns]
         status = str(record.get(status_column, "")).strip() if status_column else ""
         status_key = status.lower()
         if "abscond" in status_key:
@@ -89,7 +89,7 @@ def _load_accused(folder):
         else:
             status_class = "neutral"
         rows.append({
-            "cells": cells,
+            "values": values,
             "status_index": columns.index(status_column) if status_column else -1,
             "status_class": status_class,
         })

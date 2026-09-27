@@ -26,7 +26,7 @@
       <div class="table-scroll">
         <table class="accused-table">
           <thead><tr><th scope="col">S. No.</th>{% for column in case.accused.columns %}<th scope="col">{{ column }}</th>{% endfor %}</tr></thead>
-          <tbody>{% for accused in case.accused.rows %}<tr><td class="serial">{{ '%02d'|format(loop.index) }}</td>{% for value in accused['cells'] %}<td>{% if loop.index0 == accused['status_index'] %}<span class="accused-status {{ accused['status_class'] }}">{{ value or 'Not specified' }}</span>{% else %}{{ value or '—' }}{% endif %}</td>{% endfor %}</tr>{% endfor %}</tbody>
+          <tbody>{% for accused in case.accused.rows %}<tr><td class="serial">{{ '%02d'|format(loop.index) }}</td>{% for value in accused.values %}<td>{% if loop.index0 == accused.status_index %}<span class="accused-status {{ accused.status_class }}">{{ value or 'Not specified' }}</span>{% else %}{{ value or '—' }}{% endif %}</td>{% endfor %}</tr>{% endfor %}</tbody>
         </table>
       </div>
       {% else %}
